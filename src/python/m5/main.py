@@ -518,6 +518,9 @@ def main():
     if options.verbose > 0 and options.quiet > 0:
         options.usage(2)
 
+    gem5_started = None
+    gem5_finished = None
+
     verbose = options.verbose - options.quiet
     if verbose >= 0:
         print("gem5 Simulator System.  https://www.gem5.org")
@@ -527,9 +530,9 @@ def main():
         print(f"gem5 version {_m5.core.gem5Version}")
         print(f"gem5 compiled {_m5.core.compileDate}")
 
-        print(
-            f"gem5 started {datetime.datetime.now().strftime('%b %e %Y %X')}"
-        )
+        gem5_started = datetime.datetime.now()
+        print(f"gem5 started {gem5_started.strftime('%b %e %Y %X')}")
+
         print(
             "gem5 executing on %s, pid %d"
             % (socket.gethostname(), os.getpid())
@@ -684,3 +687,16 @@ def main():
     # once the script is done
     if options.interactive:
         interact(scope)
+
+    if verbose >= 0:
+        gem5_finished = datetime.datetime.now()
+        print("gem5 finished %s" % gem5_finished.strftime("%b %e %Y %X"))
+
+        gem5_elapsed = gem5_finished - gem5_started
+
+        m, s = divmod(gem5_elapsed.total_seconds(), 60)
+        print(
+            "gem5 elapsed {}h:{}m:{}s".format(
+                int(m // 60), int(m % 60), int(s)
+            )
+        )
