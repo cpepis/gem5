@@ -40,5 +40,11 @@
             "label": "[gem5] All open Issues",
             "query": "state:open repo:${owner}/${repository} sort:updated-desc"
         }
-    ]
+    ],
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/ALL"
+    ],
+    "python.terminal.activateEnvironment": false,
+    "python.defaultInterpreterPath": "~/.venv/bin/python",
+    "terminal.integrated.defaultProfile.linux": "tmux"
 }
