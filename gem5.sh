@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+exec > >(tee gem5.log) 2>&1
 
 # Color output
 RED='\033[0;31m'
