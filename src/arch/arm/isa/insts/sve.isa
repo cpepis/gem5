@@ -5042,6 +5042,62 @@ let {{
             destElem = srcElem1 + srcElem2 * mult;
     '''
     sveAdrInst('adr', 'Adr', 'SimdAddOp', ('uint32_t', 'uint64_t'), adrCode)
+    # AESD (vectors)
+    cryptoBinCode = '''
+        constexpr uint32_t eltspersegment = 16 / sizeof(Element);
+
+        Crypto crypto;
+        Element tempElem1[eltspersegment];
+        Element tempElem2[eltspersegment];
+        Element destElem[eltspersegment];
+        for (auto s = 0; s < eCount / eltspersegment; s ++) {
+            for (auto i = 0; i < eltspersegment; i ++) {
+                tempElem1[i] = AA64FpOp1_x[s * eltspersegment + i];
+                tempElem2[i] = AA64FpOp2_x[s * eltspersegment + i];
+            }
+            %(op)s
+            for (auto i = 0; i < eltspersegment; i ++) {
+                AA64FpDest_x[s * eltspersegment + i] = destElem[i];
+            }
+        }
+    '''
+    aesdCode = '''
+            crypto.aesDecrypt(destElem, tempElem1, tempElem2);'''
+    sveBinInst('aesd', 'Aesd', 'SimdAesOp', ('uint8_t',), '', PredType.NONE,
+            True, customIterCode=cryptoBinCode % {'op': aesdCode})
+    # AESE (vectors)
+    aeseCode = '''
+            crypto.aesEncrypt(destElem, tempElem1, tempElem2);'''
+    sveBinInst('aese', 'Aese', 'SimdAesOp', ('uint8_t',), '', PredType.NONE,
+            True, customIterCode=cryptoBinCode % {'op': aeseCode})
+    # AESIMC
+    cryptoUnaryCode = '''
+        constexpr uint32_t eltspersegment = 16 / sizeof(Element);
+
+        Crypto crypto;
+        Element tempElem1[eltspersegment];
+        Element destElem[eltspersegment];
+        for (auto s = 0; s < eCount / eltspersegment; s ++) {
+            for (auto i = 0; i < eltspersegment; i ++) {
+                tempElem1[i] = AA64FpOp1_x[s * eltspersegment + i];
+            }
+            %(op)s
+            for (auto i = 0; i < eltspersegment; i ++) {
+                AA64FpDest_x[s * eltspersegment + i] = destElem[i];
+            }
+        }
+    '''
+    aesimcCode = '''
+            crypto.aesInvMixColumns(destElem, tempElem1);'''
+    sveBinInst('aesimc', 'Aesimc', 'SimdAesMixOp', ('uint8_t',), '',
+            PredType.NONE, True,
+            customIterCode=cryptoUnaryCode % {'op': aesimcCode})
+    # AESMC (vectors)
+    aesmcCode = '''
+            crypto.aesMixColumns(destElem, tempElem1);'''
+    sveBinInst('aesmc', 'Aesmc', 'SimdAesMixOp', ('uint8_t',), '',
+            PredType.NONE, True,
+            customIterCode=cryptoUnaryCode % {'op': aesmcCode})
     # AND (immediate)
     andCode = 'destElem = srcElem1 & srcElem2;'
     sveWideImmInst('and', 'AndImm', 'SimdAluOp', ('uint64_t',), andCode)
@@ -5132,7 +5188,7 @@ let {{
                PredType.MERGE, True)
     # BCAX
     bcaxCode = 'destElem ^= srcElem1 & (~srcElem2);'
-    sveBinInst('bcax', 'Bcax', 'SimdShiftOp', ('uint64_t',), bcaxCode,
+    sveBinInst('bcax', 'Bcax', 'SimdSha3Op', ('uint64_t',), bcaxCode,
                 isDestructive=True)
     # BDEP
     bdepCode = '''
@@ -5620,7 +5676,7 @@ let {{
     svePredLogicalInst('eors', 'PredEors', 'SimdPredAluOp', ('uint8_t',),
                        eorCode, isFlagSetting=True)
     # EORTB
-    sveBinInterInst('eortb', 'Eortb', 'SimdAluOp', unsignedTypes, eorCode,
+    sveBinInterInst('eortb', 'Eortb', 'SimdSha3Op', unsignedTypes, eorCode,
                     tb = True)
     # EORV
     sveAssocReducInst('eorv', 'Eorv', 'SimdReduceAluOp', unsignedTypes,
@@ -6093,11 +6149,13 @@ let {{
                  PredType.MERGE)
     # FRSQRTE
     frsqrteCode = fpOp % 'fplibRSqrtEstimate<Element>(srcElem1, fpscr, fpcr)'
-    sveUnaryInst('frsqrte', 'Frsqrte', 'SimdFloatSqrtOp', floatTypes,
+    sveUnaryInst('frsqrte', 'Frsqrte', 'SimdCvtOp', floatTypes,
                  frsqrteCode)
     # FRSQRTS
+    # Floating-point reciprocal square root step is really a multiply
+    # and add(sub)
     frsqrtsCode = fpBinOp % 'RSqrtStepFused'
-    sveBinInst('frsqrts', 'Frsqrts', 'SimdFloatAluOp', floatTypes,
+    sveBinInst('frsqrts', 'Frsqrts', 'SimdFloatMultAccOp', floatTypes,
                frsqrtsCode)
     # FSCALE
     fscaleCode = fpBinOp % 'Scale'
@@ -6429,14 +6487,14 @@ let {{
             __uint128_t res = poly_mul(srcElem1, srcElem2);
             destElem = res;
     '''
-    sveBinLongInst('pmullb', 'Pmullb', 'SimdAluOp', ('uint8_t','uint32_t'),
+    sveBinLongInst('pmullb', 'Pmullb', 'SimdMultOp', ('uint8_t','uint32_t'),
                    pmullCode)
-    sveBinLongInst('pmullb', 'Pmullb128', 'SimdAluOp', ('uint64_t',),
+    sveBinLongInst('pmullb', 'Pmullb128', 'SimdMultOp', ('uint64_t',),
                    pmullCode)
     # PMULLT
-    sveBinLongInst('pmullt', 'Pmullt', 'SimdAluOp', ('uint8_t','uint32_t'),
+    sveBinLongInst('pmullt', 'Pmullt', 'SimdMultOp', ('uint8_t','uint32_t'),
                     pmullCode, uptTop = True)
-    sveBinLongInst('pmullt', 'Pmullt128', 'SimdAluOp', ('uint64_t',),
+    sveBinLongInst('pmullt', 'Pmullt128', 'SimdMultOp', ('uint64_t',),
                     pmullCode, uptTop = True)
     # PNEXT
     svePNextInst('pnext', 'Pnext', 'SimdPredAluOp', unsignedTypes)
@@ -6470,7 +6528,7 @@ let {{
                      smallUnsignedTypes, raddhnCode, uptTop = True)
     # RAX1
     rax1Code = 'destElem = srcElem1 ^ ((srcElem2 << 1) | (srcElem2 >> 63));'
-    sveBinInst('rax', 'Rax1', 'SimdAluOp', ('uint64_t',), rax1Code)
+    sveBinInst('rax', 'Rax1', 'SimdSha3Op', ('uint64_t',), rax1Code)
     # RBIT
     rbitCode = '''
         destElem = reverseBits(srcElem1);'''
@@ -6668,19 +6726,19 @@ let {{
     sveBinInst('sdivr', 'Sdivr', 'SimdDivOp', signedTypes, sdivrCode,
                PredType.MERGE, True)
     # SDOT (2-way, indexed)
-    sveDotInst('sdot', 'Sdot2wayi', 'SimdMultAccOp',
+    sveDotInst('sdot', 'Sdot2wayi', 'SimdDotProdOp',
                ['int16_t, int16_t, int32_t'],
                isIndexed = True)
     # SDOT (2-way, vectors)
-    sveDotInst('sdot', 'Sdot2wayv', 'SimdMultAccOp',
+    sveDotInst('sdot', 'Sdot2wayv', 'SimdDotProdOp',
                ['int16_t, int16_t, int32_t'],
                isIndexed = False)
     # SDOT (4-way, indexed)
-    sveDotInst('sdot', 'Sdoti', 'SimdMultAccOp',
+    sveDotInst('sdot', 'Sdoti', 'SimdDotProdOp',
                ['int8_t, int8_t, int32_t', 'int16_t, int16_t, int64_t'],
                isIndexed = True)
     # SDOT (4-way, vectors)
-    sveDotInst('sdot', 'Sdotv', 'SimdMultAccOp',
+    sveDotInst('sdot', 'Sdotv', 'SimdDotProdOp',
                ['int8_t, int8_t, int32_t', 'int16_t, int16_t, int64_t'],
                isIndexed = False)
     # SEL (predicates)
@@ -6754,6 +6812,17 @@ let {{
                             (destElem & mask(srcElem3));
     '''
     sveTerImmInst('sli', 'Sli', 'SimdShiftOp', unsignedTypes, sliCode)
+    # SM4E
+    sm4eCode = '''
+            crypto.sm4e(destElem, tempElem1, tempElem2);'''
+    sveBinInst('sm4e', 'Sm4e', 'SimdSm4eOp', ('uint32_t',), '', PredType.NONE,
+            True, customIterCode=cryptoBinCode % {'op': sm4eCode})
+    # SM4EKEY
+    sm4ekeyCode = '''
+            crypto.sm4ekey(destElem, tempElem1, tempElem2);'''
+    sveBinInst('sm4ekey', 'Sm4ekey', 'SimdSm4eOp', ('uint32_t',), '',
+            PredType.NONE,
+            True, customIterCode=cryptoBinCode % {'op': sm4ekeyCode})
     # SMAX (immediate)
     maxCode = 'destElem = (srcElem1 > srcElem2) ? srcElem1 : srcElem2;'
     sveWideImmInst('smax', 'SmaxImm', 'SimdCmpOp', signedTypes, maxCode)
@@ -8107,17 +8176,17 @@ let {{
     sveBinInst('udivr', 'Udivr', 'SimdDivOp', unsignedTypes, udivrCode,
                PredType.MERGE, True)
     # UDOT (2-way, indexed)
-    sveDotInst('udot', 'Udot2wayi', 'SimdMultAccOp',
+    sveDotInst('udot', 'Udot2wayi', 'SimdDotProdOp',
                ['uint16_t, uint16_t, uint32_t'], isIndexed = True)
     # UDOT (2-way, vectors)
-    sveDotInst('udot', 'Udot2wayv', 'SimdMultAccOp',
+    sveDotInst('udot', 'Udot2wayv', 'SimdDotProdOp',
                ['uint16_t, uint16_t, uint32_t'], isIndexed = False)
     # UDOT (4-way, indexed)
-    sveDotInst('udot', 'Udoti', 'SimdMultAccOp',
+    sveDotInst('udot', 'Udoti', 'SimdDotProdOp',
                ['uint8_t, uint8_t, uint32_t', 'uint16_t, uint16_t, uint64_t'],
                isIndexed = True)
     # UDOT (4-way, vectors)
-    sveDotInst('udot', 'Udotv', 'SimdMultAccOp',
+    sveDotInst('udot', 'Udotv', 'SimdDotProdOp',
                ['uint8_t, uint8_t, uint32_t', 'uint16_t, uint16_t, uint64_t'],
                isIndexed = False)
     # UHADD
@@ -8939,7 +9008,7 @@ let {{
             destElem = ((destElem >> srcElem2) |
                     (destElem << (sizeof(Element) * 8 - srcElem2)));
     '''
-    sveBinImmInst('xar', 'Xar', 'SimdAluOp', unsignedTypes, xarCode)
+    sveBinImmInst('xar', 'Xar', 'SimdSha3Op', unsignedTypes, xarCode)
     # ZIP1, ZIP2 (predicates)
     zipPredIterCode = '''
         constexpr unsigned sz = sizeof(Element);

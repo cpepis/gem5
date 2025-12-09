@@ -90,7 +90,11 @@ class OpClass(Enum):
         "SimdSha256Hash2",
         "SimdShaSigma2",
         "SimdShaSigma3",
+        "SimdSha3",
+        "SimdSm4e",
+        "SimdCrc",
         "SimdPredAlu",
+        "SimdDotProd",
         "Matrix",
         "MatrixMov",
         "MatrixOP",
@@ -98,7 +102,6 @@ class OpClass(Enum):
         "MemWrite",
         "FloatMemRead",
         "FloatMemWrite",
-        "IprAccess",
         "InstPrefetch",
         "SimdUnitStrideLoad",
         "SimdUnitStrideStore",
@@ -127,6 +130,7 @@ class OpClass(Enum):
         "SimdBf16Mult",
         "SimdBf16MultAcc",
         "Bf16Cvt",
+        "System",
     ]
 
 

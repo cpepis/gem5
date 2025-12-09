@@ -797,10 +797,23 @@ class DynInst : public ExecContext, public RefCounted
     //Instruction Queue Entry
     //-----------------------
     /** Sets this instruction as a entry the IQ. */
-    void setInIQ() { status.set(IqEntry); }
+    void
+    setInIQ(IQUnit *_iq)
+    {
+        assert(!iq);
+        status.set(IqEntry);
+        iq = _iq;
+    }
 
-    /** Sets this instruction as a entry the IQ. */
-    void clearInIQ() { status.reset(IqEntry); }
+    /** Clears this instruction as a entry the IQ. */
+    void
+    clearInIQ()
+    {
+        assert(iq);
+        status.reset(IqEntry);
+        iq->remove(this);
+        iq = nullptr;
+    }
 
     /** Returns whether or not this instruction has issued. */
     bool isInIQ() const { return status[IqEntry]; }
@@ -811,6 +824,8 @@ class DynInst : public ExecContext, public RefCounted
     /** Returns whether or not this instruction is squashed in the IQ. */
     bool isSquashedInIQ() const { return status[SquashedInIQ]; }
 
+    /** Pointer to the IQ storing the instruction */
+    IQUnit *iq = nullptr;
 
     //Load / Store Queue Functions
     //-----------------------
@@ -1066,6 +1081,23 @@ class DynInst : public ExecContext, public RefCounted
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.is(MiscRegClass));
         setMiscReg(reg.index(), val);
+
+        /** If the MiscReg allows non-serializing updates, we
+         * can update the value immediately without waiting
+         * for commit, but only if the instruction is non
+         * speculative
+         */
+        if (!reg.regClass().isSerializing(reg)) {
+            assert(isNonSpeculative());
+
+            bool no_squash_from_TC = thread->noSquashFromTC;
+            thread->noSquashFromTC = true;
+
+            /** Update the architectural state with the new value */
+            cpu->setMiscReg(reg.index(), val, threadNumber);
+
+            thread->noSquashFromTC = no_squash_from_TC;
+        }
     }
 
     /** Called at the commit stage to update the misc. registers. */
